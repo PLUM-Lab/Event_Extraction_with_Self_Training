@@ -1,0 +1,126 @@
+# Data
+# instead of using bert large cased now we will use reoberta-large
+python preprocessing/process_ace.py -i <INPUT_DIR>/LDC2006T06/data -o <OUTPUT_DIR>
+  -s resource/splits/ACE05-E -b bert-large-cased -c <BERT_CACHE_DIR> -l english
+
+python preprocessing/process_ere.py -i <INPUT_DIR>/data -o <OUTPUT_DIR>
+  -b bert-large-cased -c <BERT_CACHE_DIR> -l english -d normal
+
+# Config
+oneie.json # the exact config file used to train the released best role model
+roberta_oneie.json  # config file used to train a roberta baseline model
+example.json given # not changed
+
+# train
+self_train.py # this later will be used to perform self-training with feedbacks
+train.py # add roberta to original training file
+
+# ie model
+roberta_model.py # add roberta into the original model
+model.py # fix logic bug on line 992
+
+# score model
+score_model.py # the model used to calculate the compatibility score
+self_attention.py # self attention used to compute the representation for amr path
+
+# preprocess the dataset
+python preprocessing/process_ace.py -i YOUR_ACE05_SOURCE_PATH -o YOUR_PROJECT_PATH/dataset/ACE05/bert_large_cased -s resource/splits/ACE05-E -b bert-large-cased -c bert_cache -l english
+
+# evaluate the model
+python eval.py -c config/eval.json -n test1 -g 1 -l -lc -t
+
+# self train IE model with feedback
+python self_train.py -c config/baseline.json -n test_self1 -g 3 -l
+python self_train.py -c config/baseline.json -n self_seq/exp2 -g 3 -l
+
+# label amr
+CUDA_VISIBLE_DEVICES=3 python amr_processing/label_amr.py 0
+
+# evaluate
+python eval.py -c config/baseline.json -n test_self1 -g 3 -l
+
+# evaluate score model
+python eval_score_model.py -c config/eval_score_model.json -n test_score1 -g 3
+
+# experiment
+ie is for pretrained ie model
+score is for score model
+self_train is for self training model with feedback
+further_train is for model further trained on ACE05+
+
+
+# amr 3.0 data preprocess
+This is the aligned amr 3.0 dataset by JAMR with nodes and edges
+YOUR_PROJECT_PATH/dataset/aligned_amr3.0/training_all.json
+
+This is used to convert original token to roberta token
+YOUR_PROJECT_PATH/amr_processing/convert2roberta_tokens.py
+
+process raw amr
+YOUR_PROJECT_PATH/amr_processing/process_gold_amr.py
+
+
+# datasets info
+
+all aligned amr 3.0
+YOUR_PROJECT_PATH/dataset/aligned_amr3.0/training_all.json
+
+amr 3.0 with roberta tokenization
+YOUR_PROJECT_PATH/dataset/aligned_amr3.0/aux_amr3.0.jsonl
+
+# train score model
+python score_train.py -c config/graph_score/roberta_baseline.json -g 3 -n test_score1
+-m experiment/ie/ACE/new_exp1/best.role.mdl
+
+# train seq model
+python score_train.py -c config/seq_score/roberta_ere.json -g 0 -n seq_score/ere/roberta_exp1 -i 1
+
+# train score seq model amr-ie 
+python score_train.py -c config/seq_score/roberta_ace.json -g 0 -n seq_score/ACE/roberta_exp2 -i 2 -ie amrie
+
+# eval seq score model
+python score_eval.py -c config/seq_score/roberta_ace.json -g 0 -n test -m experiment/ie/ACE/new_exp1/best.role.mdl -s experiment/seq_score/ACE/new_exp2/best.role.mdl
+
+# eval ie model
+
+python self_eval.py -c config/baseline.json -g 0 -n test -l -m experiment/ie/ACE/new_exp1/best.role.mdl
+
+# self-training
+python self_train.py -c config/baseline.json -n test -g 0 -l -lr 0.001 -blr 0.0001 -m 1.0 -a 1 -i 1 -f
+
+# train ie model
+python train.py -c config/bert_oneie-e.json -n ie/ACE/exp_bert_1 -g 0
+
+# covert bert to roberta
+python script/bert2roberta.py -i dataset/ere/bert_large_cased/train.oneie.json -o dataset/temp/train.oneie.json
+
+# compare two dataset
+python script/compare_datasets.py -i dataset/ACE05-E/roberta_large/train.oneie.json -o dataset/temp/train.oneie.json
+
+# label unlabeled data
+python label_unlabled_data.py -c config/baseline_ere.json -n label_data/ere -g 0 -l -i 1
+
+# label unlabeled data
+python label_unlabeled.py -c config/unlabeled.json -n label_data/nyt/ACE -g 0 -l -i 1
+
+# train AMR-IE model on ACE-E
+python amr_train.py -c config/roberta_amrie-e.json -n ie/ACE/roberta_exp1 -g 0
+
+# evaluate score model
+python score_eval.py -c config/seq_score/roberta_ace.json -g 0 -n test -m experiment/ie/ACE/roberta_exp1/best.role.mdl -s experiment/seq_score/ACE/roberta_exp1/best.role.mdl
+
+# stf train with amr-ie
+python self_train.py -c config/baseline.json -n ACE/self_seq/wo_trigger/lr-0.001_blr-0.0001_final-2_seed-43_st-0.5_m-1.0 -g 0 -s 43 -l -lr 0.001 -blr 0.0001 -a 90000 -i 2 -f -st 0.5 -m 1.0 -ie amrie 
+
+python self_amr_train.py -c config/baseline.json -n test -g 0 -s 43 -lr 0.001 -blr 0.0001 -a 1 -i 7 -f -st 0.5 -m 1.0
+
+python amr_train.py -c config/roberta_amrie-e.json -n ie/ACE/roberta_exp1 -g 0 -m 1.0 -a 1 -f -st 0.6
+
+# stf train with baseline_score_model and OneIE
+python self_train.py -c config/baseline.json -n ACE/self_text/wo_trigger/lr-0.001_blr-0.0001_final-1_seed-43_st-0.6_m-1.0 -g 0 -s 43 -l -lr 0.001 -blr 0.0001 -a 1 -i 1 -f -st 0.6 -m 1.0
+
+# stf train with trigger feedback and trigger weight
+python self_train.py -c config/baseline.json -n test -g 0  -lr 0.001 -blr 0.0001 -a 90000 -i 2 -f -st 0.6 -m 1.0 -tr -trw 1.0
+
+# test score model's ability to predict ie results combined with an IE model
+python score_eval_ie.py -c config/seq_score/roberta_ere.json  -g 0 -n test -m experiment/ie/ere/roberta_exp3/best.role.mdl  -s experiment/seq_score/ere/roberta_exp5/best.role.mdl

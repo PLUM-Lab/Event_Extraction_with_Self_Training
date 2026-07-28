@@ -1,0 +1,13 @@
+# Nov27
+1. relabel ACE05 dataset with amr
+(1) relabel ACE05 (done)
+(2) relabel amr (done)
+2. clean up score_data
+(1) allow both sequence_score_mode and graph_score_model work
+3. retrain score model with new amr category roberta/bert, w w/o valid pattern
+(1) train roberta w valid pattern
+(2) train roberta w/o valid pattern
+(3) train bert w valid pattern
+(4) train bert w/o valid pattern
+4. make score_data work with graph_score_model
+5. finish implementing graph_score_model
